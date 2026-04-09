@@ -55,7 +55,12 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 
 	mediaType, _, err := mime.ParseMediaType(contentType)
 
-	if mediaType != "image/png" || mediaType != "image/jpeg" {
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Unable to determine media type", nil)
+		return
+	}
+
+	if mediaType != "image/png" && mediaType != "image/jpeg" {
 		respondWithError(w, http.StatusForbidden, "Invalid media type", nil)
 		return
 	}
