@@ -1,18 +1,31 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"mime"
 	"net/http"
 	"os"
+	"os/exec"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
 )
+
+type videoInfo struct {
+	Streams []streams `json:"streams"`
+}
+
+type streams struct {
+	Width       int    `json:"width"`
+	Height      int    `json:"height"`
+	AspectRatio string `json:"display_aspect_ratio"`
+}
 
 func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request) {
 
@@ -78,6 +91,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "unable to create temp file", err)
+		return
 	}
 
 	defer os.Remove(tempFile.Name())
@@ -97,13 +111,32 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	videoAspectRatio, err := getVideoAspectRatio(tempFile.Name())
+
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "unable to determine video aspect ratio", err)
+		return
+	}
+
+	var aspectRatioCategorised string
+
+	switch videoAspectRatio {
+	case "16:9":
+		aspectRatioCategorised = "landscape"
+	case "9:16":
+		aspectRatioCategorised = "portrait"
+	default:
+		aspectRatioCategorised = "other"
+
+	}
+
 	key := make([]byte, 32)
 
 	rand.Read(key)
 
 	encodedString := base64.RawURLEncoding.EncodeToString(key)
 
-	fileKey := encodedString + ".mp4"
+	fileKey := aspectRatioCategorised + "/" + encodedString + ".mp4"
 
 	cfg.s3Client.PutObject(r.Context(), &s3.PutObjectInput{
 		Bucket:      &cfg.s3Bucket,
@@ -122,4 +155,37 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 
 	respondWithJSON(w, http.StatusOK, video)
+}
+
+func getVideoAspectRatio(filePath string) (string, error) {
+
+	cmd := exec.Command("ffprobe", "-v", "error", "-print_format", "json", "-show_streams", filePath)
+
+	var output bytes.Buffer
+
+	cmd.Stdout = &output
+
+	cmd.Run()
+
+	var videoInfo videoInfo
+
+	if err := json.Unmarshal(output.Bytes(), &videoInfo); err != nil {
+		return "", err
+	}
+
+	aspectRatio := videoInfo.Streams[0].AspectRatio
+
+	return aspectRatio, nil
+}
+
+func GreatedCommonDivisor(a, b int) int {
+	for b != 0 {
+		a, b = b, a%b
+	}
+	return a
+}
+
+func GetAspectRatio(width, height int) string {
+	divisor := GreatedCommonDivisor(width, height)
+	return fmt.Sprintf("%d:%d", width/divisor, height/divisor)
 }
