@@ -138,10 +138,18 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 
 	fileKey := aspectRatioCategorised + "/" + encodedString + ".mp4"
 
+	processedFilePath, err := createVideoForFastStart(tempFile.Name())
+
+	processedFile, err := os.Open(processedFilePath)
+
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "unable to read processed file", err)
+	}
+
 	cfg.s3Client.PutObject(r.Context(), &s3.PutObjectInput{
 		Bucket:      &cfg.s3Bucket,
 		Key:         &fileKey,
-		Body:        tempFile,
+		Body:        processedFile,
 		ContentType: &mediaType,
 	})
 
@@ -178,14 +186,27 @@ func getVideoAspectRatio(filePath string) (string, error) {
 	return aspectRatio, nil
 }
 
-func GreatedCommonDivisor(a, b int) int {
+func greatedCommonDivisor(a, b int) int {
 	for b != 0 {
 		a, b = b, a%b
 	}
 	return a
 }
 
-func GetAspectRatio(width, height int) string {
-	divisor := GreatedCommonDivisor(width, height)
+func getAspectRatio(width, height int) string {
+	divisor := greatedCommonDivisor(width, height)
 	return fmt.Sprintf("%d:%d", width/divisor, height/divisor)
+}
+
+func createVideoForFastStart(filepath string) (string, error) {
+
+	outputFile := filepath + ".processing"
+
+	cmd := exec.Command("ffmpeg", "-i", filepath, "-c", "copy", "-movflags", "faststart", "-f", "mp4", outputFile)
+
+	if err := cmd.Run(); err != nil {
+		return "", err
+	}
+
+	return outputFile, nil
 }
