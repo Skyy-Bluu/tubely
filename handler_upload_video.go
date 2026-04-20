@@ -1,16 +1,13 @@
 package main
 
 import (
-	"bytes"
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io"
 	"mime"
 	"net/http"
 	"os"
-	"os/exec"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
@@ -153,60 +150,22 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		ContentType: &mediaType,
 	})
 
-	videoURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, fileKey)
+	// for public bucket use case
+	// videoURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, fileKey)
 
+	videoURL := fmt.Sprintf("%s,%s", cfg.s3Bucket, fileKey)
 	video.VideoURL = &videoURL
+
+	presignedVideo, err := cfg.dbVideoToSignedVideo(r.Context(), video)
+
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "unable to presign video", err)
+	}
 
 	if err := cfg.db.UpdateVideo(video); err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Unable to update video URL", err)
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, video)
-}
-
-func getVideoAspectRatio(filePath string) (string, error) {
-
-	cmd := exec.Command("ffprobe", "-v", "error", "-print_format", "json", "-show_streams", filePath)
-
-	var output bytes.Buffer
-
-	cmd.Stdout = &output
-
-	cmd.Run()
-
-	var videoInfo videoInfo
-
-	if err := json.Unmarshal(output.Bytes(), &videoInfo); err != nil {
-		return "", err
-	}
-
-	aspectRatio := videoInfo.Streams[0].AspectRatio
-
-	return aspectRatio, nil
-}
-
-func greatedCommonDivisor(a, b int) int {
-	for b != 0 {
-		a, b = b, a%b
-	}
-	return a
-}
-
-func getAspectRatio(width, height int) string {
-	divisor := greatedCommonDivisor(width, height)
-	return fmt.Sprintf("%d:%d", width/divisor, height/divisor)
-}
-
-func createVideoForFastStart(filepath string) (string, error) {
-
-	outputFile := filepath + ".processing"
-
-	cmd := exec.Command("ffmpeg", "-i", filepath, "-c", "copy", "-movflags", "faststart", "-f", "mp4", outputFile)
-
-	if err := cmd.Run(); err != nil {
-		return "", err
-	}
-
-	return outputFile, nil
+	respondWithJSON(w, http.StatusOK, presignedVideo)
 }
