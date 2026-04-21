@@ -95,13 +95,14 @@ func (cfg *apiConfig) handlerVideoGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if video.VideoURL != nil {
-		presignedVideo, err := cfg.dbVideoToSignedVideo(r.Context(), video)
-		if err != nil {
-			respondWithError(w, http.StatusInternalServerError, "unable to presign video", err)
-		}
-		video = presignedVideo
-	}
+	// for signed URL usecase with private s3 buckets
+	// if video.VideoURL != nil {
+	// 	presignedVideo, err := cfg.dbVideoToSignedVideo(r.Context(), video)
+	// 	if err != nil {
+	// 		respondWithError(w, http.StatusInternalServerError, "unable to presign video", err)
+	// 	}
+	// 	video = presignedVideo
+	// }
 
 	respondWithJSON(w, http.StatusOK, video)
 }
@@ -124,15 +125,16 @@ func (cfg *apiConfig) handlerVideosRetrieve(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	for i, video := range videos {
-		if video.VideoURL != nil {
-			videos[i], err = cfg.dbVideoToSignedVideo(r.Context(), video)
+	// for signed URL usecase with private s3 buckets
+	// for i, video := range videos {
+	// 	if video.VideoURL != nil {
+	// 		videos[i], err = cfg.dbVideoToSignedVideo(r.Context(), video)
 
-			if err != nil {
-				respondWithError(w, http.StatusInternalServerError, "unable to presign video", err)
-			}
-		}
-	}
+	// 		if err != nil {
+	// 			respondWithError(w, http.StatusInternalServerError, "unable to presign video", err)
+	// 		}
+	// 	}
+	// }
 
 	respondWithJSON(w, http.StatusOK, videos)
 }

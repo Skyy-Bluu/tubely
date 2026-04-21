@@ -153,19 +153,22 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	// for public bucket use case
 	// videoURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, fileKey)
 
-	videoURL := fmt.Sprintf("%s,%s", cfg.s3Bucket, fileKey)
+	videoURL := fmt.Sprintf("%s/%s", cfg.s3CfDistribution, fileKey)
 	video.VideoURL = &videoURL
 
-	presignedVideo, err := cfg.dbVideoToSignedVideo(r.Context(), video)
+	// for signed URL usecase with private s3 buckets
+	// videoURL := fmt.Sprintf("%s,%s", cfg.s3Bucket, fileKey)
+	// video.VideoURL = &videoURL
+	// presignedVideo, err := cfg.dbVideoToSignedVideo(r.Context(), video)
 
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "unable to presign video", err)
-	}
+	// if err != nil {
+	// 	respondWithError(w, http.StatusInternalServerError, "unable to presign video", err)
+	// }
 
 	if err := cfg.db.UpdateVideo(video); err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Unable to update video URL", err)
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, presignedVideo)
+	respondWithJSON(w, http.StatusOK, video)
 }
